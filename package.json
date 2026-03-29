@@ -1,0 +1,15 @@
+{
+  "name": "@horai93/vrt",
+  "version": "0.1.0",
+  "description": "Visual regression testing CLI for AI agents. Wraps agent-browser and reg-cli.",
+  "type": "module",
+  "bin": {
+    "vrt": "./bin/vrt.mjs"
+  },
+  "keywords": ["vrt", "visual-regression", "agent-browser", "ai-agent"],
+  "license": "MIT",
+  "author": "horai93",
+  "dependencies": {
+    "reg-cli": "^0.18.14"
+  }
+}
