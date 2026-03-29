@@ -43,14 +43,34 @@ export function parseViewports(spec) {
   });
 }
 
+const VALID_WAIT_UNTIL = new Set(["networkidle", "load", "domcontentloaded"]);
+
 export function resolveOpts(flags) {
+  const threshold = parseFloat(flags.threshold ?? "0");
+  if (isNaN(threshold) || threshold < 0 || threshold > 1) {
+    console.error("Error: --threshold must be a number between 0 and 1");
+    process.exit(1);
+  }
+
+  const delay = parseInt(flags.delay ?? "2000");
+  if (isNaN(delay) || delay < 0) {
+    console.error("Error: --delay must be a non-negative integer");
+    process.exit(1);
+  }
+
+  const waitUntil = flags["wait-until"] ?? "networkidle";
+  if (!VALID_WAIT_UNTIL.has(waitUntil)) {
+    console.error(`Error: --wait-until must be one of: ${[...VALID_WAIT_UNTIL].join(", ")}`);
+    process.exit(1);
+  }
+
   return {
     viewports: parseViewports(flags.viewports),
     pages: (flags.pages ?? "/").split(",").map((p) => p.trim()),
     outDir: resolve(flags.out ?? "./vrt-output"),
-    threshold: parseFloat(flags.threshold ?? "0"),
-    delay: parseInt(flags.delay ?? "2000"),
-    waitUntil: flags["wait-until"] ?? "networkidle",
+    threshold,
+    delay,
+    waitUntil,
     full: !flags["no-full"],
     json: !!flags.json,
   };

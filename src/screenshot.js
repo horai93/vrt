@@ -7,16 +7,21 @@ export function screenshot(url, outDir, viewports, { waitUntil = "networkidle", 
   const files = [];
 
   for (const vp of viewports) {
-    ab(`set viewport ${vp.width} ${vp.height}`);
-    ab(`open ${url}`);
-    ab(`wait --load ${waitUntil}`);
-    if (delay > 0) ab(`wait ${delay}`);
+    try {
+      ab(`set viewport ${vp.width} ${vp.height}`);
+      ab(`open ${url}`);
+      ab(`wait --load ${waitUntil}`);
+      if (delay > 0) ab(`wait ${delay}`);
 
-    const filename = `${vp.label}.png`;
-    const filepath = join(outDir, filename);
-    const fullFlag = full ? "--full " : "";
-    ab(`screenshot ${fullFlag}"${filepath}"`);
-    files.push({ viewport: vp.label, path: filepath });
+      const filename = `${vp.label}.png`;
+      const filepath = join(outDir, filename);
+      const fullFlag = full ? "--full " : "";
+      ab(`screenshot ${fullFlag}"${filepath}"`);
+      files.push({ viewport: vp.label, path: filepath });
+    } catch (e) {
+      console.error(`   ⚠️  Screenshot failed [${vp.label}]: ${e.message?.split("\n")[0] ?? "unknown error"}`);
+      files.push({ viewport: vp.label, error: e.message, skipped: true });
+    }
   }
 
   return files;

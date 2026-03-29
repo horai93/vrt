@@ -77,14 +77,7 @@ Exit code: `0` = all passed, `1` = differences detected.
 
 ## AI Agent Skill
 
-A [SKILL.md](https://github.com/horai93/vrt) for cross-harness agent support is included.
-Copy it to your skills directory:
-
-```bash
-cp -r /path/to/vrt/skills/vrt ~/.agents/skills/vrt
-```
-
-Works with pi, Claude Code, Codex — any harness that reads `~/.agents/skills/`.
+For AI agent integration, create a SKILL.md at `~/.agents/skills/vrt/SKILL.md` that teaches agents how to use this CLI. Works with pi, Claude Code, Codex — any harness that reads `~/.agents/skills/`.
 
 ## License
 
