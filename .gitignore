@@ -1,4 +1,5 @@
 node_modules/
 dist/
 vrt-output/
+*.png
 package-lock.json

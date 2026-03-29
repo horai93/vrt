@@ -2,12 +2,19 @@
 
 import { execSync } from "node:child_process";
 import { mkdirSync, existsSync, rmSync, readFileSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { resolve, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const REG_CLI = join(__dirname, "..", "node_modules", ".bin", "reg-cli");
+const PKG = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
 
 const VIEWPORTS = [
   { label: "desktop", width: 1280, height: 720 },
   { label: "mobile", width: 375, height: 812 },
 ];
+
+const BOOLEAN_FLAGS = new Set(["json", "no-full", "version"]);
 
 function run(cmd, opts = {}) {
   try {
@@ -18,8 +25,22 @@ function run(cmd, opts = {}) {
   }
 }
 
+function regCli(args) {
+  return run(`"${REG_CLI}" ${args}`);
+}
+
 function ab(args) {
   return run(`agent-browser ${args}`);
+}
+
+function checkAgentBrowser() {
+  try {
+    run("agent-browser --version", { timeout: 5000 });
+  } catch {
+    console.error("Error: agent-browser is not installed or not in PATH.");
+    console.error("Install it first: npm i -g agent-browser");
+    process.exit(1);
+  }
 }
 
 function screenshot(url, outDir, viewports, { waitUntil = "networkidle", delay = 2000, full = true } = {}) {
@@ -34,7 +55,8 @@ function screenshot(url, outDir, viewports, { waitUntil = "networkidle", delay =
 
     const filename = `${vp.label}.png`;
     const filepath = join(outDir, filename);
-    ab(`screenshot ${full ? "--full" : ""} ${filepath}`);
+    const fullFlag = full ? "--full " : "";
+    ab(`screenshot ${fullFlag}"${filepath}"`);
     files.push({ viewport: vp.label, path: filepath });
   }
 
@@ -89,16 +111,15 @@ function compare(url1, url2, pages, outDir, viewports, opts = {}) {
     console.log("   📸 Screenshots (current)...");
     screenshot(fullUrl2, currentDir, viewports, opts);
 
-    // Pixel diff via reg-cli
+    // Pixel diff via reg-cli (from package's own node_modules)
     console.log("   🔍 Pixel diff...");
     mkdirSync(diffDir, { recursive: true });
     const regJsonPath = join(outDir, `reg-${pageName}.json`);
 
     let pixelResult;
     try {
-      run(
-        `npx reg-cli ${currentDir} ${baselineDir} ${diffDir} --json ${regJsonPath} --matchingThreshold ${opts.threshold ?? 0}`,
-        { ignoreError: true }
+      regCli(
+        `"${currentDir}" "${baselineDir}" "${diffDir}" --json "${regJsonPath}" --matchingThreshold ${opts.threshold}`
       );
       if (existsSync(regJsonPath)) {
         pixelResult = JSON.parse(readFileSync(regJsonPath, "utf8"));
@@ -129,7 +150,8 @@ function compare(url1, url2, pages, outDir, viewports, opts = {}) {
         console.log(`   ⏭️  DOM [${d.viewport}]: skipped (${d.error})`);
         continue;
       }
-      const status = d.identical ? "✅" : d.changed ? "⚠️" : "✅";
+      const hasDiff = (d.additions ?? 0) > 0 || (d.removals ?? 0) > 0;
+      const status = d.identical || !hasDiff ? "✅" : "⚠️";
       console.log(`   ${status} DOM [${d.viewport}]: +${d.additions ?? 0} -${d.removals ?? 0} ~${d.unchanged ?? 0}`);
     }
     const pxStatus = pageResult.pixel.failed === 0 ? "✅" : "❌";
@@ -141,13 +163,14 @@ function compare(url1, url2, pages, outDir, viewports, opts = {}) {
 
 function printUsage() {
   console.log(`
-vrt - Visual Regression Testing CLI for AI agents
+vrt v${PKG.version} - Visual Regression Testing CLI for AI agents
 
 Usage:
   vrt compare <url1> <url2> [options]    Compare two sites
   vrt snapshot <url> <outDir> [options]  Take baseline screenshots
   vrt diff <dir1> <dir2> [options]       Diff two screenshot directories
   vrt help                               Show this help
+  vrt --version                          Show version
 
 Options:
   --pages <paths>          Comma-separated page paths (default: /)
@@ -175,10 +198,13 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "json" || key === "no-full") {
+      if (BOOLEAN_FLAGS.has(key)) {
         args.flags[key] = true;
-      } else if (i + 1 < argv.length) {
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
         args.flags[key] = argv[++i];
+      } else {
+        console.error(`Error: --${key} requires a value`);
+        process.exit(1);
       }
     } else {
       args._.push(arg);
@@ -192,14 +218,33 @@ function parseViewports(spec) {
   if (!spec) return VIEWPORTS;
   return spec.split(",").map((s) => {
     const [w, h] = s.trim().split("x").map(Number);
+    if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0) {
+      console.error(`Error: invalid viewport spec "${s.trim()}". Use WxH format (e.g. 1280x720)`);
+      process.exit(1);
+    }
     const label = w <= 480 ? "mobile" : w <= 1024 ? "tablet" : "desktop";
     return { label: `${label}-${w}x${h}`, width: w, height: h };
   });
 }
 
+function safeClearDir(dir) {
+  const critical = ["/", resolve(process.env.HOME ?? "/"), resolve(process.env.HOME ?? "/", "Desktop")];
+  if (critical.includes(dir)) {
+    console.error(`Error: refusing to delete ${dir}`);
+    process.exit(1);
+  }
+  if (existsSync(dir)) rmSync(dir, { recursive: true });
+  mkdirSync(dir, { recursive: true });
+}
+
 // Main
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
+
+if (args.flags.version) {
+  console.log(`vrt v${PKG.version}`);
+  process.exit(0);
+}
 
 if (!command || command === "help") {
   printUsage();
@@ -223,6 +268,8 @@ if (command === "compare") {
     process.exit(1);
   }
 
+  checkAgentBrowser();
+
   console.log(`🔬 VRT Compare`);
   console.log(`   Baseline: ${url1}`);
   console.log(`   Current:  ${url2}`);
@@ -230,23 +277,21 @@ if (command === "compare") {
   console.log(`   Viewports: ${viewports.map((v) => `${v.width}x${v.height}`).join(", ")}`);
   console.log(`   Output:   ${outDir}`);
 
-  if (existsSync(outDir)) rmSync(outDir, { recursive: true });
-  mkdirSync(outDir, { recursive: true });
+  safeClearDir(outDir);
 
   const results = compare(url1, url2, pages, outDir, viewports, opts);
 
   // Generate HTML report
   const reportDir = join(outDir, "report");
   try {
-    run(
-      `npx reg-cli ${join(outDir, "current")} ${join(outDir, "baseline")} ${join(outDir, "diff")} --report ${reportDir} --json ${join(outDir, "reg.json")} --matchingThreshold ${opts.threshold}`,
-      { ignoreError: true }
+    regCli(
+      `"${join(outDir, "current")}" "${join(outDir, "baseline")}" "${join(outDir, "diff")}" --report "${reportDir}" --json "${join(outDir, "reg.json")}" --matchingThreshold ${opts.threshold}`
     );
   } catch {}
 
   // Summary
   const totalDom = results.flatMap((r) => r.dom);
-  const domIssues = totalDom.filter((d) => d.changed && !d.identical);
+  const domIssues = totalDom.filter((d) => !d.skipped && ((d.additions ?? 0) > 0 || (d.removals ?? 0) > 0));
   const pixelFails = results.reduce((sum, r) => sum + r.pixel.failed, 0);
   const pixelPasses = results.reduce((sum, r) => sum + r.pixel.passed, 0);
 
@@ -275,6 +320,8 @@ if (command === "compare") {
     process.exit(1);
   }
 
+  checkAgentBrowser();
+
   console.log(`📸 Taking snapshots of ${url}`);
   const resolvedDir = resolve(dir);
 
@@ -299,9 +346,8 @@ if (command === "compare") {
   mkdirSync(diffDir, { recursive: true });
 
   console.log(`🔍 Diffing ${dir1} vs ${dir2}`);
-  const result = run(
-    `npx reg-cli ${resolve(dir2)} ${resolve(dir1)} ${diffDir} --report ${reportDir} --json ${join(outDir, "reg.json")} --matchingThreshold ${opts.threshold}`,
-    { ignoreError: true }
+  const result = regCli(
+    `"${resolve(dir2)}" "${resolve(dir1)}" "${diffDir}" --report "${reportDir}" --json "${join(outDir, "reg.json")}" --matchingThreshold ${opts.threshold}`
   );
   console.log(result);
 

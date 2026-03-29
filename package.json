@@ -9,6 +9,13 @@
   "keywords": ["vrt", "visual-regression", "agent-browser", "ai-agent"],
   "license": "MIT",
   "author": "horai93",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/horai93/vrt.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "reg-cli": "^0.18.14"
   }
