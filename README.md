@@ -18,8 +18,8 @@ agent-browser install  # downloads Chrome
 ## Install
 
 ```bash
-ghq get https://github.com/horai93/vrt  # or git clone
-cd "$(ghq root)/github.com/horai93/vrt"
+git clone https://github.com/horai93/vrt.git
+cd vrt
 npm install
 npm link
 ```
