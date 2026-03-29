@@ -5,7 +5,10 @@ Visual regression testing CLI for AI agents. Wraps [agent-browser](https://githu
 ## Install
 
 ```bash
-npm i -g @horai93/vrt
+git clone https://github.com/horai93/vrt.git
+cd vrt
+npm install
+npm link
 ```
 
 Requires `agent-browser` to be installed.

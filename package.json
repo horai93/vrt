@@ -1,5 +1,5 @@
 {
-  "name": "@horai93/vrt",
+  "name": "vrt-cli",
   "version": "0.1.0",
   "description": "Visual regression testing CLI for AI agents. Wraps agent-browser and reg-cli.",
   "type": "module",
